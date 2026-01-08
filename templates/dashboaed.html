@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - UET Library{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Welcome back, {{ member.name }}!</h1>
+        <p>Manage your borrowed books and explore the library</p>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ borrowed_books|length }}</h3>
+                <p>Books Borrowed</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ 5 - borrowed_books|length }}</h3>
+                <p>Available Slots</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ member.member_id }}</h3>
+                <p>Member ID</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Active</h3>
+                <p>Account Status</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="borrowed-section">
+        <div class="section-header">
+            <h2>
+                <i class="fas fa-book-open"></i>
+                Currently Borrowed Books
+            </h2>
+        </div>
+        
+        {% if borrowed_books %}
+        <div class="books-grid">
+            {% for book in borrowed_books %}
+            <div class="book-card borrowed">
+                <div class="book-badge">Borrowed</div>
+                <div class="book-cover">
+                    <i class="fas fa-book"></i>
+                </div>
+                <div class="book-info">
+                    <h3 class="book-title">{{ book.title }}</h3>
+                    <p class="book-author">
+                        <i class="fas fa-user"></i>
+                        {{ book.author }}
+                    </p>
+                    <p class="book-isbn">
+                        <i class="fas fa-barcode"></i>
+                        {{ book.isbn }}
+                    </p>
+                    <span class="book-category">{{ book.category }}</span>
+                </div>
+                <button class="btn btn-return" onclick="returnBook('{{ book.isbn }}')">
+                    <i class="fas fa-undo"></i>
+                    Return Book
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-book-open"></i>
+            <h3>No Borrowed Books</h3>
+            <p>You haven't borrowed any books yet. Browse our collection to get started!</p>
+            <a href="{{ url_for('books') }}" class="btn btn-primary">
+                <i class="fas fa-search"></i>
+                Browse Books
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function returnBook(isbn) {
+    if (!confirm('Are you sure you want to return this book?')) {
+        return;
+    }
+    
+    fetch('/api/books/return', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isbn: isbn })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Book returned successfully!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('An error occurred', 'error');
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Browse Books - UET Library{% endblock %}
+
+{% block content %}
+<div class="books-page-container">
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-book"></i>
+            Browse Library Collection
+        </h1>
+        <p>Explore our extensive collection of books</p>
+    </div>
+    
+    <div class="filters-section">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="quickSearch" placeholder="Quick search by title or author...">
+        </div>
+        
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-category="all">
+                <i class="fas fa-th"></i>
+                All Books
+            </button>
+            <button class="filter-btn" data-category="Novel">
+                <i class="fas fa-book-open"></i>
+                Novels
+            </button>
+            <button class="filter-btn" data-category="Programming">
+                <i class="fas fa-code"></i>
+                Programming
+            </button>
+            <button class="filter-btn" data-category="Engineering">
+                <i class="fas fa-cogs"></i>
+                Engineering
+            </button>
+            <button class="filter-btn" data-category="Science">
+                <i class="fas fa-flask"></i>
+                Science
+            </button>
+        </div>
+    </div>
+    
+    <div class="books-count">
+        <span id="booksCount">0</span> books found
+    </div>
+    
+    <div id="booksGrid" class="books-grid">
+        <div class="loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            Loading books...
+        </div>
+    </div>
+</div>
+
+<!-- Borrow Modal -->
+<div id="borrowModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h2><i class="fas fa-hand-holding"></i> Borrow Book</h2>
+        <p id="borrowBookTitle" style="font-size: 1.1rem; font-weight: 600; color: #2d3748;"></p>
+        <div class="form-group" style="margin-top: 1.5rem;">
+            <label for="borrowMemberId" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-weight: 600; font-size: 1rem;">
+                <i class="fas fa-id-card"></i>
+                Enter Your Member ID
+            </label>
+            <input 
+                type="text" 
+                id="borrowMemberId" 
+                placeholder="e.g., 2024-EE-176"
+                style="width: 100%; padding: 0.875rem 1rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;"
+            >
+        </div>
+        <div class="modal-buttons" style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+            <button class="btn btn-primary" onclick="confirmBorrow()" style="flex: 1;">
+                <i class="fas fa-check"></i>
+                Confirm Borrow
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal()" style="flex: 1;">
+                <i class="fas fa-times"></i>
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let allBooks = [];
+let currentCategory = 'all';
+let selectedBookISBN = null;
+
+async function loadBooks() {
+    try {
+        const response = await fetch('/api/books/all');
+        allBooks = await response.json();
+        displayBooks(allBooks);
+    } catch (error) {
+        document.getElementById('booksGrid').innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error Loading Books</h3>
+                <p>Please try again later</p>
+            </div>
+        `;
+    }
+}
+
+function displayBooks(books) {
+    const grid = document.getElementById('booksGrid');
+    const count = document.getElementById('booksCount');
+    
+    count.textContent = books.length;
+    
+    if (books.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-book"></i>
+                <h3>No Books Found</h3>
+                <p>Try adjusting your filters or search terms</p>
+            </div>
+        `;
+        return;
+    }
+    
+    grid.innerHTML = books.map(book => `
+        <div class="book-card" data-category="${book.category}">
+            ${book.available_copies > 0 
+                ? '<div class="book-badge available">Available</div>' 
+                : '<div class="book-badge unavailable">Unavailable</div>'}
+            <div class="book-cover">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="book-info">
+                <h3 class="book-title">${book.title}</h3>
+                <p class="book-author">
+                    <i class="fas fa-user"></i>
+                    ${book.author}
+                </p>
+                <p class="book-year">
+                    <i class="fas fa-calendar"></i>
+                    ${book.year}
+                </p>
+                <p class="book-isbn">
+                    <i class="fas fa-barcode"></i>
+                    ${book.isbn}
+                </p>
+                <span class="book-category">${book.category}</span>
+                <div class="book-copies">
+                    <i class="fas fa-copy"></i>
+                    ${book.available_copies} copies available
+                </div>
+            </div>
+            ${book.available_copies > 0 
+                ? `<button class="btn btn-borrow" onclick="openBorrowModal('${book.isbn}', '${book.title.replace(/'/g, "\\'")}')">
+                    <i class="fas fa-hand-holding"></i>
+                    Borrow Book
+                </button>`
+                : `<button class="btn btn-disabled" disabled>
+                    <i class="fas fa-ban"></i>
+                    Not Available
+                </button>`}
+        </div>
+    `).join('');
+}
+
+function openBorrowModal(isbn, title) {
+    selectedBookISBN = isbn;
+    const modal = document.getElementById('borrowModal');
+    const titleElement = document.getElementById('borrowBookTitle');
+    const inputElement = document.getElementById('borrowMemberId');
+    
+    // Set the book title
+    titleElement.textContent = title;
+    
+    // Clear previous input
+    inputElement.value = '';
+    
+    // Show the modal
+    modal.style.display = 'block';
+    
+    // Focus on input
+    setTimeout(() => inputElement.focus(), 100);
+}
+
+function closeModal() {
+    const modal = document.getElementById('borrowModal');
+    modal.style.display = 'none';
+}
+
+async function confirmBorrow() {
+    const memberId = document.getElementById('borrowMemberId').value.trim();
+    
+    if (!memberId) {
+        showNotification('Please enter your Member ID', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/books/borrow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                isbn: selectedBookISBN,
+                member_id: memberId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Book borrowed successfully!', 'success');
+            closeModal();
+            loadBooks();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('An error occurred', 'error');
+    }
+}
+
+function filterByCategory(category) {
+    currentCategory = category;
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.filter-btn').classList.add('active');
+    
+    const searchTerm = document.getElementById('quickSearch').value.toLowerCase();
+    filterAndSearch(searchTerm);
+}
+
+function filterAndSearch(searchTerm) {
+    let filtered = allBooks;
+    
+    if (currentCategory !== 'all') {
+        filtered = filtered.filter(book => book.category === currentCategory);
+    }
+    
+    if (searchTerm) {
+        filtered = filtered.filter(book => 
+            book.title.toLowerCase().includes(searchTerm) ||
+            book.author.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    displayBooks(filtered);
+}
+
+document.getElementById('quickSearch').addEventListener('input', (e) => {
+    filterAndSearch(e.target.value.toLowerCase());
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        filterByCategory(btn.dataset.category);
+    });
+});
+
+// Close modal when clicking outside
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('borrowModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+    }
+});
+
+// Handle enter key in member ID input
+document.addEventListener('DOMContentLoaded', function() {
+    const memberInput = document.getElementById('borrowMemberId');
+    if (memberInput) {
+        memberInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmBorrow();
+            }
+        });
+    }
+});
+
+loadBooks();
+</script>
+{% endblock %}

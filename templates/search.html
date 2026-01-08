@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}Search - UET Library{% endblock %}
+
+{% block extra_css %}
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 2rem;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: #000;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-secondary {
+    background: #718096;
+    color: white;
+    flex: 1;
+}
+
+.btn-secondary:hover {
+    background: #4a5568;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-page-container">
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-search"></i>
+            Advanced Search
+        </h1>
+        <p>Find books using ISBN, Title, or Author</p>
+    </div>
+    
+    <div class="search-panel">
+        <div class="search-tabs">
+            <button class="search-tab active" data-type="isbn">
+                <i class="fas fa-barcode"></i>
+                Search by ISBN
+            </button>
+            <button class="search-tab" data-type="title">
+                <i class="fas fa-heading"></i>
+                Search by Title
+            </button>
+            <button class="search-tab" data-type="author">
+                <i class="fas fa-user"></i>
+                Search by Author
+            </button>
+        </div>
+        
+        <div class="search-content">
+            <div class="search-input-group">
+                <div class="search-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="Enter ISBN number..."
+                    autofocus
+                >
+                <button id="searchBtn" class="btn btn-primary">
+                    <i class="fas fa-search"></i>
+                    Search
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="searchResults" class="search-results">
+        <div class="search-placeholder">
+            <i class="fas fa-search"></i>
+            <h3>Start Your Search</h3>
+            <p>Enter your search criteria above to find books</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentSearchType = 'isbn';
+
+const placeholders = {
+    isbn: 'Enter ISBN number...',
+    title: 'Enter book title...',
+    author: 'Enter author name...'
+};
+
+document.querySelectorAll('.search-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        currentSearchType = tab.dataset.type;
+        document.getElementById('searchInput').placeholder = placeholders[currentSearchType];
+        document.getElementById('searchInput').value = '';
+        
+        document.getElementById('searchResults').innerHTML = `
+            <div class="search-placeholder">
+                <i class="fas fa-search"></i>
+                <h3>Start Your Search</h3>
+                <p>Enter your search criteria above to find books</p>
+            </div>
+        `;
+    });
+});
+
+async function performSearch() {
+    const query = document.getElementById('searchInput').value.trim();
+    
+    if (!query) {
+        showNotification('Please enter a search term', 'warning');
+        return;
+    }
+    
+    const resultsDiv = document.getElementById('searchResults');
+    resultsDiv.innerHTML = `
+        <div class="loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            Searching...
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/api/books/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: currentSearchType,
+                query: query
+            })
+        });
+        
+        const books = await response.json();
+        
+        if (books.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-book-dead"></i>
+                    <h3>No Books Found</h3>
+                    <p>No books match your search criteria</p>
+                </div>
+            `;
+            return;
+        }
+        
+        resultsDiv.innerHTML = `
+            <div class="results-header">
+                <h3>
+                    <i class="fas fa-check-circle"></i>
+                    Found ${books.length} book${books.length > 1 ? 's' : ''}
+                </h3>
+            </div>
+            <div class="books-grid">
+                ${books.map(book => `
+                    <div class="book-card">
+                        ${book.available_copies > 0 
+                            ? '<div class="book-badge available">Available</div>' 
+                            : '<div class="book-badge unavailable">Unavailable</div>'}
+                        <div class="book-cover">
+                            <i class="fas fa-book"></i>
+                        </div>
+                        <div class="book-info">
+                            <h3 class="book-title">${book.title}</h3>
+                            <p class="book-author">
+                                <i class="fas fa-user"></i>
+                                ${book.author}
+                            </p>
+                            <p class="book-year">
+                                <i class="fas fa-calendar"></i>
+                                ${book.year}
+                            </p>
+                            <p class="book-isbn">
+                                <i class="fas fa-barcode"></i>
+                                ${book.isbn}
+                            </p>
+                            <span class="book-category">${book.category}</span>
+                            <div class="book-copies">
+                                <i class="fas fa-copy"></i>
+                                ${book.available_copies} copies available
+                            </div>
+                        </div>
+                        ${book.available_copies > 0 
+                            ? `<button class="btn btn-borrow" onclick="openBorrowModal('${book.isbn}', '${book.title.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-hand-holding"></i>
+                                Borrow Book
+                            </button>`
+                            : `<button class="btn btn-disabled" disabled>
+                                <i class="fas fa-ban"></i>
+                                Not Available
+                            </button>`}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        resultsDiv.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Search Error</h3>
+                <p>An error occurred while searching</p>
+            </div>
+        `;
+    }
+}
+
+let selectedBookISBN = null;
+
+function openBorrowModal(isbn, title) {
+    selectedBookISBN = isbn;
+    const modal = document.createElement('div');
+    modal.id = 'borrowModal';
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="modal-close" onclick="this.closest('.modal').remove()">&times;</span>
+            <h2><i class="fas fa-hand-holding"></i> Borrow Book</h2>
+            <p style="margin-bottom: 1rem;">${title}</p>
+            <div class="form-group">
+                <label><i class="fas fa-id-card"></i> Enter Your Member ID</label>
+                <input type="text" id="borrowMemberId" placeholder="e.g., 2024-EE-176">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="confirmBorrow()">
+                    <i class="fas fa-check"></i> Confirm
+                </button>
+                <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function confirmBorrow() {
+    const memberId = document.getElementById('borrowMemberId').value.trim();
+    if (!memberId) {
+        showNotification('Please enter your Member ID', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/books/borrow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isbn: selectedBookISBN, member_id: memberId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Book borrowed successfully!', 'success');
+            document.getElementById('borrowModal').remove();
+            performSearch();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('An error occurred', 'error');
+    }
+}
+
+document.getElementById('searchBtn').addEventListener('click', performSearch);
+document.getElementById('searchInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+</script>
+{% endblock %}

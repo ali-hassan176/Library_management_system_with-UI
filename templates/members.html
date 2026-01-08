@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Members - UET Library{% endblock %}
+
+{% block content %}
+<div class="members-page-container">
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-users"></i>
+            Library Members
+        </h1>
+        <p>View member information and borrowed books</p>
+    </div>
+    
+    <div class="member-lookup-section">
+        <h2>
+            <i class="fas fa-search"></i>
+            Member Lookup
+        </h2>
+        <div class="lookup-form">
+            <input type="text" id="memberIdSearch" placeholder="Enter Member ID (e.g., 2024-EE-176)">
+            <button class="btn btn-primary" onclick="searchMember()">
+                <i class="fas fa-search"></i>
+                Search
+            </button>
+        </div>
+    </div>
+    
+    <div id="memberResult" class="member-result"></div>
+    
+    <div class="all-members-section">
+        <h2>
+            <i class="fas fa-list"></i>
+            All Members
+        </h2>
+        <div id="membersList" class="members-grid">
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading members...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Return Book Modal -->
+<div id="returnModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeReturnModal()">&times;</span>
+        <h2><i class="fas fa-undo"></i> Return Book</h2>
+        <p id="returnBookInfo"></p>
+        <div class="modal-buttons">
+            <button class="btn btn-info" onclick="confirmReturn()">
+                <i class="fas fa-check"></i>
+                Confirm Return
+            </button>
+            <button class="btn btn-secondary" onclick="closeReturnModal()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.members-page-container {
+    animation: fadeIn 0.5s;
+}
+
+.member-lookup-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.member-lookup-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    color: #2d3748;
+}
+
+.lookup-form {
+    display: flex;
+    gap: 1rem;
+}
+
+.lookup-form input {
+    flex: 1;
+    padding: 0.875rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+}
+
+.lookup-form input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.member-result {
+    margin-bottom: 2rem;
+}
+
+.member-detail-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    animation: slideUp 0.3s;
+}
+
+.member-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.member-avatar-large {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+}
+
+.member-info-detail h2 {
+    margin-bottom: 0.5rem;
+    color: #2d3748;
+}
+
+.member-info-detail p {
+    color: #718096;
+}
+
+.member-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-box {
+    background: #f7fafc;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.stat-box h3 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-box p {
+    color: #718096;
+}
+
+.borrowed-books-list {
+    margin-top: 1.5rem;
+}
+
+.borrowed-books-list h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: #2d3748;
+}
+
+.all-members-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.all-members-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    color: #2d3748;
+}
+
+.btn-info {
+    background: #4299e1;
+    color: white;
+    flex: 1;
+}
+
+.btn-info:hover {
+    background: #3182ce;
+    transform: translateY(-2px);
+}
+</style>
+
+<script>
+let currentMemberId = null;
+let currentReturnISBN = null;
+
+async function searchMember() {
+    const memberId = document.getElementById('memberIdSearch').value.trim();
+    
+    if (!memberId) {
+        showNotification('Please enter a Member ID', 'warning');
+        return;
+    }
+    
+    const resultDiv = document.getElementById('memberResult');
+    resultDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+    
+    try {
+        const response = await fetch(`/api/members/${memberId}`);
+        
+        if (!response.ok) {
+            resultDiv.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-user-slash"></i>
+                    <h3>Member Not Found</h3>
+                    <p>No member found with ID: ${memberId}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const member = await response.json();
+        displayMemberDetail(member);
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error</h3>
+                <p>Failed to fetch member information</p>
+            </div>
+        `;
+    }
+}
+
+function displayMemberDetail(member) {
+    const resultDiv = document.getElementById('memberResult');
+    
+    let borrowedBooksHTML = '';
+    if (member.borrowed_books.length > 0) {
+        borrowedBooksHTML = `
+            <div class="borrowed-books-list">
+                <h3><i class="fas fa-book-open"></i> Currently Borrowed Books</h3>
+                <div class="books-grid">
+                    ${member.borrowed_books.map(book => `
+                        <div class="book-card borrowed">
+                            <div class="book-badge">Borrowed</div>
+                            <div class="book-cover">
+                                <i class="fas fa-book"></i>
+                            </div>
+                            <div class="book-info">
+                                <h3 class="book-title">${book.title}</h3>
+                                <p class="book-author">
+                                    <i class="fas fa-user"></i>
+                                    ${book.author}
+                                </p>
+                                <p class="book-isbn">
+                                    <i class="fas fa-barcode"></i>
+                                    ${book.isbn}
+                                </p>
+                                <span class="book-category">${book.category}</span>
+                            </div>
+                            <button class="btn btn-return" onclick="openReturnModal('${member.member_id}', '${book.isbn}', '${book.title.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-undo"></i>
+                                Return Book
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } else {
+        borrowedBooksHTML = `
+            <div class="empty-state">
+                <i class="fas fa-book-open"></i>
+                <h3>No Borrowed Books</h3>
+                <p>This member hasn't borrowed any books yet</p>
+            </div>
+        `;
+    }
+    
+    resultDiv.innerHTML = `
+        <div class="member-detail-card">
+            <div class="member-header">
+                <div class="member-avatar-large">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="member-info-detail">
+                    <h2>${member.name}</h2>
+                    <p><i class="fas fa-id-card"></i> ${member.member_id}</p>
+                </div>
+            </div>
+            
+            <div class="member-stats-row">
+                <div class="stat-box">
+                    <h3>${member.borrowed_count}</h3>
+                    <p>Books Borrowed</p>
+                </div>
+                <div class="stat-box">
+                    <h3>${5 - member.borrowed_count}</h3>
+                    <p>Available Slots</p>
+                </div>
+                <div class="stat-box">
+                    <h3>${member.can_borrow ? 'Yes' : 'No'}</h3>
+                    <p>Can Borrow More</p>
+                </div>
+            </div>
+            
+            ${borrowedBooksHTML}
+        </div>
+    `;
+}
+
+async function loadAllMembers() {
+    const list = document.getElementById('membersList');
+    
+    try {
+        const response = await fetch('/api/members/all');
+        const members = await response.json();
+        
+        if (members.length === 0) {
+            list.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>No Members Yet</h3>
+                    <p>Add members in the admin panel</p>
+                </div>
+            `;
+            return;
+        }
+        
+        list.innerHTML = members.map(member => `
+            <div class="member-card">
+                <div class="member-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="member-info">
+                    <h3>${member.name}</h3>
+                    <p class="member-id">
+                        <i class="fas fa-id-card"></i>
+                        ${member.member_id}
+                    </p>
+                    <div class="member-stats">
+                        <span class="stat">
+                            <i class="fas fa-book"></i>
+                            ${member.borrowed_count} borrowed
+                        </span>
+                        <span class="stat">
+                            <i class="fas fa-check-circle"></i>
+                            ${5 - member.borrowed_count} available
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        list.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error Loading Members</h3>
+            </div>
+        `;
+    }
+}
+
+function openReturnModal(memberId, isbn, title) {
+    currentMemberId = memberId;
+    currentReturnISBN = isbn;
+    document.getElementById('returnBookInfo').textContent = `Return: ${title}`;
+    document.getElementById('returnModal').style.display = 'block';
+}
+
+function closeReturnModal() {
+    document.getElementById('returnModal').style.display = 'none';
+}
+
+async function confirmReturn() {
+    try {
+        const response = await fetch('/api/books/return', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                member_id: currentMemberId,
+                isbn: currentReturnISBN
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Book returned successfully!', 'success');
+            closeReturnModal();
+            searchMember();
+            loadAllMembers();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('An error occurred', 'error');
+    }
+}
+
+// Enter key for search
+document.getElementById('memberIdSearch').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        searchMember();
+    }
+});
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('returnModal');
+    if (event.target == modal) {
+        closeReturnModal();
+    }
+}
+
+loadAllMembers();
+</script>
+{% endblock %}
